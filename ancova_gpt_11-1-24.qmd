@@ -1,0 +1,202 @@
+---
+title: "Análise de Covariância (ANCOVA) em Dados de Bioecologia"
+author: "Seu Nome"
+date: "`r format(Sys.time(), '%m, %d, %Y')`"
+format:
+  html:
+    toc: true
+    toc-location: left
+    code-fold: true
+    theme: cosmo
+number-sections: true
+lang: pt-BR
+editor_options: 
+  chunk_output_type: console
+---
+
+------------------------------------------------------------------------
+
+```{r}
+#| message: false
+#| warning: false
+# Carregar pacotes necessários
+library(ggplot2)
+library(dplyr)
+library(knitr)
+library(car)
+library(kableExtra)
+```
+
+# Introdução
+
+A **Análise de Covariância (ANCOVA)** é uma técnica estatística que combina ANOVA e regressão linear para avaliar se há diferenças significativas entre grupos enquanto controla por uma ou mais variáveis contínuas (covariáveis). Esta análise é útil em estudos bioecológicos onde fatores ambientais podem influenciar as variáveis de interesse.
+
+# Objetivo
+
+Realizar uma ANCOVA utilizando dados fictícios de bioecologia, demonstrando todas as etapas necessárias, desde a criação dos dados até a interpretação dos resultados, incluindo os pressupostos da análise.
+
+# Criação dos Dados Fictícios
+
+Vamos criar um conjunto de dados fictício que representa a influência de um tratamento (por exemplo, fertilizante) no crescimento de plantas, controlando pela quantidade de luz recebida.
+
+```{r}
+set.seed(234)
+
+# Criar variáveis
+n <- 100  # número de observações
+tratamento <- factor(rep(c("Controle", "Tratamento"), each = n/2))
+luz <- rnorm(n, mean = 10, sd = 2)  # covariável contínua
+
+# Efeito do tratamento e da covariável na resposta
+crescimento <- 5 + 2*(tratamento == "Tratamento") + 0.8*luz + rnorm(n, sd = 1)
+
+# Criar data frame
+dados <- data.frame(tratamento, luz, crescimento)
+
+# Visualizar 8 linhas aleatórias dos dados
+set.seed(123)
+kbl(dados[sample(nrow(dados), 8), ])
+```
+
+# Análise Exploratória
+
+## Estatísticas Descritivas
+
+```{r}
+dados %>%
+  group_by(tratamento) %>%
+  summarise(
+    `Crescimento Médio` = mean(crescimento),
+    `Luz Média` = mean(luz)
+  ) %>%
+  kable(caption = "Estatísticas Descritivas por Tratamento")
+```
+
+## Gráfico de Dispersão
+
+```{r}
+ggplot(dados, aes(x = luz, y = crescimento, color = tratamento)) +
+  geom_point() +
+  labs(
+    title = "Dispersão de Crescimento vs Luz por Tratamento",
+    x = "Quantidade de Luz",
+    y = "Crescimento"
+  ) +
+  theme_minimal()
+```
+
+# Pressupostos da ANCOVA
+
+1.  **Linearidade**: A relação entre a covariável e a variável dependente deve ser linear.
+2.  **Homogeneidade de Regências**: As inclinações das linhas de regressão devem ser as mesmas em todos os grupos.
+3.  **Independência dos Erros**: As observações devem ser independentes.
+4.  **Normalidade dos Erros**: Os resíduos devem ser normalmente distribuídos.
+5.  **Homogeneidade de Variâncias**: A variância dos resíduos deve ser a mesma em todos os níveis do fator.
+
+# Verificação dos Pressupostos
+
+## Linearidade
+
+```{r}
+# Gráfico de resíduos vs covariável
+modelo_linearidade <- lm(crescimento ~ luz, data = dados)
+plot(dados$luz, resid(modelo_linearidade), main = "Resíduos vs Luz", xlab = "Luz", ylab = "Resíduos")
+abline(h = 0, col = "red")
+```
+
+**Interpretação**: A ausência de padrões claros no gráfico indica que o pressuposto de linearidade é atendido.
+
+## Homogeneidade de Regências
+
+```{r}
+# Modelo com interação
+modelo_interacao <- lm(crescimento ~ tratamento * luz, data = dados)
+anova(modelo_interacao)
+```
+
+**Interpretação**: Se a interação entre `tratamento` e `luz` não for significativa, o pressuposto de homogeneidade de regências é atendido.
+
+**O que Acontece se a Homogeneidade de Regências Não for Atendida?**
+
+Se a homogeneidade de regências for violada, isto é, se as inclinações das linhas de regressão forem significativamente diferentes entre os grupos, as seguintes implicações ocorrem:
+
+1.  **Interpretação Complicada**: O efeito do fator não é consistente em todos os níveis da covariável, tornando difícil generalizar os efeitos do tratamento.
+
+2.  **Resultados Enganosos**: A ANCOVA pode subestimar ou superestimar os efeitos reais, levando a conclusões errôneas sobre a significância dos efeitos.
+
+3.  **Alternativas Necessárias**: A análise padrão de ANCOVA pode não ser apropriada, e outras abordagens devem ser consideradas.
+
+## Normalidade dos Erros
+
+```{r}
+# Ajustar o modelo ANCOVA
+modelo_ancova <- lm(crescimento ~ tratamento + luz, data = dados)
+
+# Extrair os resíduos e criar um data frame
+dados_residuos <- data.frame(Residuos = resid(modelo_ancova))
+
+# Criar o histograma dos resíduos com ggplot2
+ggplot(dados_residuos, aes(x = Residuos)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "black") +
+  labs(
+    title = "Histograma dos Resíduos",
+    x = "Resíduos",
+    y = "Frequência"
+  ) +
+  theme_minimal()
+
+# Teste de Shapiro-Wilk
+shapiro.test(dados_residuos$Residuos)
+```
+
+**Interpretação**: Um p-valor maior que 0.05 no teste de Shapiro-Wilk indica que os resíduos seguem uma distribuição normal.
+
+## Homogeneidade de Variâncias
+
+```{r}
+# Teste de Levene
+leveneTest(crescimento ~ tratamento, data = dados)
+```
+
+**Interpretação**: Um p-valor maior que 0.05 no teste de Levene indica que as variâncias são homogêneas entre os grupos.
+
+# Realização da ANCOVA
+
+```{r}
+# Modelo ANCOVA
+modelo_ancova <- lm(crescimento ~ tratamento + luz, data = dados)
+summary(modelo_ancova)
+```
+
+# Interpretação dos Resultados
+
+-   **Efeito do Tratamento**: Verificar se o coeficiente associado ao `tratamento` é significativo.
+-   **Efeito da Luz**: Confirmar se a covariável `luz` tem um efeito significativo no `crescimento`.
+-   **R² Ajustado**: Indica a proporção da variabilidade explicada pelo modelo.
+
+# Visualização dos Resultados
+
+```{r}
+# Gráfico das linhas de regressão ajustadas
+ggplot(dados, aes(x = luz, y = crescimento, color = tratamento)) +
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE) +
+  labs(
+    title = "Linhas de Regressão Ajustadas por Tratamento",
+    x = "Quantidade de Luz",
+    y = "Crescimento"
+  ) +
+  theme_minimal()
+```
+
+# Conclusão
+
+A ANCOVA realizada permite concluir que:
+
+-   O **tratamento** teve um efeito significativo no crescimento das plantas, após controlar pela quantidade de luz recebida.
+-   A **covariável luz** também influenciou significativamente o crescimento.
+-   Os pressupostos da ANCOVA foram atendidos, validando a confiabilidade dos resultados.
+
+------------------------------------------------------------------------
+
+Este script serve como modelo para futuras análises de ANCOVA, incluindo a verificação dos pressupostos, realização da análise e interpretação dos resultados, com visualizações gráficas e tabelas formatadas.
