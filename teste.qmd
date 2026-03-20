@@ -1,0 +1,36 @@
+---
+title: "Nome da Análise"
+author: "Evaldo"
+date: "`r format(Sys.time(), '%m, %d, %Y')`"
+format:
+  html:
+    toc: true
+    toc-location: left
+    code-fold: true
+    theme: cosmo
+number-sections: true
+lang: pt-BR
+editor_options: 
+  chunk_output_type: console
+---
+
+## Introdução
+
+Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
+
+```{r}
+x <- -10:10
+y <- x^3
+df <- data.frame(x,y)
+```
+
+You can add options to executable code like this
+
+```{r}
+library(ggplot2)
+df |> 
+  ggplot(aes(x,y)) +
+  geom_point()
+```
+
+The `echo: false` option disables the printing of code (only output is displayed).
